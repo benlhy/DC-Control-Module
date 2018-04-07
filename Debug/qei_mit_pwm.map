@@ -1,7 +1,7 @@
 ******************************************************************************
                   TI ARM Linker PC v17.9.0                     
 ******************************************************************************
->> Linked Sat Apr  7 08:59:11 2018
+>> Linked Sat Apr  7 09:15:19 2018
 
 OUTPUT FILE NAME:   <qei_mit_pwm.out>
 ENTRY POINT SYMBOL: "_c_int00_noargs"  address: 00003da9

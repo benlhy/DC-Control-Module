@@ -257,6 +257,7 @@ CANIntHandler(void)
         // controller status.
         //
         ui32Status = CANStatusGet(CAN0_BASE, CAN_STS_CONTROL);
+        UARTprintf("Status: 0x%08X",ui32Status);
 
         //
         // Set a flag to indicate some errors may have occurred.
@@ -427,7 +428,7 @@ int main(void) {
 
     while (1)
     {
-        //CANsend();
+        CANsend();
         CANget();
 
 
@@ -520,13 +521,15 @@ void CANget(){
 
 void CANsend() {
     //
-    // The 4 bytes of message content will be treated as an uint32_t
-    // and incremented by one each time.
+    // Data structure:
+    // Address (to/from)
+    // Command
+    // Data
     //
-    UARTprintf("Sending msg: 0x%02X %02X %02X %02X",
-               pui8MsgDataTX[0], pui8MsgDataTX[1], pui8MsgDataTX[2],
-               pui8MsgDataTX[3]);
-    UARTprintf("data is %d",ui32MsgDataTX);
+    //UARTprintf("Sending msg: 0x%02X %02X %02X %02X",
+    //           pui8MsgDataTX[0], pui8MsgDataTX[1], pui8MsgDataTX[2],
+    //           pui8MsgDataTX[3]);
+    //UARTprintf("data is %d",ui32MsgDataTX);
     //
     // Send the CAN message using object number 1 (not the same thing as
     // CAN ID, which is also 1 in this example).  This function will cause
@@ -545,7 +548,7 @@ void CANsend() {
         //
         // If no errors then print the count of message sent
         //
-        UARTprintf(" total count = %u\n", g_ui32MsgCount);
+        //UARTprintf(" total count = %u\n", g_ui32MsgCount);
     }
 
     //

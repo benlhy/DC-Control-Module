@@ -60,7 +60,7 @@
  * 0 - No number
  * 1 ... 7 - assigned number
  *
- * For one that is connected to UART, set flag, it is number 1
+ * For one that is connected to UART, set flag, it is number 2
  *
  * HOW DO WE DETECT NEIGHBOUR NODES?
  * - Add 1 wire. Network node that is connected to UART will send out a pulse. Next node will subtract one from pulse.
@@ -101,7 +101,7 @@
 #define COUNT_PER_REV 2800
 #define TIME_TO_COUNT 0.5 // for velocity prediction
 
-#define RANK 1 // rank of the node
+#define MASTER 2 // rank of the master NODE
 
 #define WIRE_GPIO_INT_PIN GPIO_INT_PIN_1
 #define WIRE_GPIO_PIN GPIO_PIN_1
@@ -124,7 +124,11 @@ void InitConsole(void);
 void WIREconfig(void);
 void PULSEconfig(void);
 
+// Master-Slave communication over CAN
+void tellSlaveAngle(int device,int angle1,int angle2);
+void tellMasterAngle(int device,int angle1,int angle2);
 
+// Pulse
 void PULSEsend(void);
 void PULSEorderconfig(void);
 
@@ -493,7 +497,7 @@ int main(void) {
     CANconfig();
     CANRXmsgconfig();
 
-    // Need a wait for ready pulse here
+    // Need a wait for ready pulse here? Maybe not, loss in messages has to deal with which board is reset first. WHY?
 
 
 
@@ -547,6 +551,33 @@ int main(void) {
         //SysCtlDelay (1000);
     }
 }
+/*
+ * This function sets the CAN TX message for the master to tell slave devices the angle to turn to
+ */
+
+void tellSlaveAngle(int device, int angle1, int angle2){
+    ui32MsgDataTX = 0;
+    ui32MsgDataTX = device;
+    ui32MsgDataTX =  ui32MsgDataTX << 9;
+    ui32MsgDataTX |= angle1;
+    ui32MsgDataTX =  ui32MsgDataTX << 9;
+    ui32MsgDataTX |= angle2;
+
+}
+
+/*
+ * This function tells the Master what the hell is going on.
+ */
+void tellMasterAngle(int device,int angle1,int angle2) {
+    ui32MsgDataTX = 0;
+    ui32MsgDataTX = device;
+    ui32MsgDataTX =  ui32MsgDataTX << 9;
+    ui32MsgDataTX |= angle1;
+    ui32MsgDataTX =  ui32MsgDataTX << 9;
+    ui32MsgDataTX |= angle2;
+}
+
+
 /*
  * This function sets up the order in which the controllers are ordered.
  */
@@ -706,12 +737,26 @@ void CANsend() {
     //
     // Increment the value in the message data.
     //
-    ui32MsgDataTX++;
+
+    //ui32MsgDataTX++;
+    if (txID==MASTER){
+        // tell slaves what to do here
+        tellSlaveAngle(3,180,0);
+    }
+    else {
+        tellMasterAngle(2,currPosition0,currPosition1);
+    }
     SysCtlDelay(500);
 }
 
 void CANRXmsgconfig(){
-    sCANMessageRX.ui32MsgID = 0;
+    if (txID==2){
+        sCANMessageRX.ui32MsgID = 0;  // accept all incoming data
+    }
+    else {
+        sCANMessageRX.ui32MsgID = 2;  // accept only commands from 2
+    }
+
     sCANMessageRX.ui32MsgIDMask = 0;
     sCANMessageRX.ui32Flags = MSG_OBJ_RX_INT_ENABLE | MSG_OBJ_USE_ID_FILTER;
     sCANMessageRX.ui32MsgLen = 8;

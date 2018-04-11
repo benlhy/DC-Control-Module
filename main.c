@@ -44,11 +44,37 @@
 // Need to set:
 // 1. Velocity/position control
 // 2. Velocity/position to go to
+//
+//
+/*
+ * PULSE
+ * D1 - in
+ * D2 - out
+ *
+ *
+ * CAN message format:
+ * Negotiating, on boot
+ *
+ * Bits[0:3]
+ *
+ * 0 - No number
+ * 1 ... 7 - assigned number
+ *
+ * For one that is connected to UART, set flag, it is number 1
+ *
+ * HOW DO WE DETECT NEIGHBOUR NODES?
+ * - Add 1 wire. Network node that is connected to UART will send out a pulse. Next node will subtract one from pulse.
+ * - What if not connected to UART?
+ *
+ *
+ *
+ */
 //*****************************************************************************
 
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include "inc/hw_gpio.h"
 #include "inc/hw_types.h"
 #include "inc/hw_ints.h"
@@ -68,11 +94,17 @@
 #include "utils/uartstdio.h"
 #include "utils/uartstdio.c"
 
+
 // Definitions
 #define ENCODER_COUNT_1 14000 // set up to count 5 revolutions
 #define ENCODER_COUNT_2 14000
 #define COUNT_PER_REV 2800
 #define TIME_TO_COUNT 0.5 // for velocity prediction
+
+#define RANK 1 // rank of the node
+
+#define WIRE_GPIO_INT_PIN GPIO_INT_PIN_1
+#define WIRE_GPIO_PIN GPIO_PIN_1
 // Prototypes
 
 // Convert/set velocity
@@ -89,6 +121,15 @@ void TIMERconfig(void);
 void CANconfig(void);
 void QEIvelocityConfig(void);
 void InitConsole(void);
+void WIREconfig(void);
+void PULSEconfig(void);
+
+
+void PULSEsend(void);
+void PULSEorderconfig(void);
+
+// Wire
+void readWire(void);
 
 // CAN
 void CANsend();
@@ -182,6 +223,8 @@ int controlsigv1 = 0;
 
 uint32_t ledFlag = 1;
 
+char first_node_flag = 0;
+
 uint8_t stateTable[4] = {
                          GPIO_PIN_0, // CW
                          GPIO_PIN_1, // CCW
@@ -194,9 +237,34 @@ tCANMsgObject sCANMessageTX;
 uint32_t ui32MsgDataTX;
 uint8_t *pui8MsgDataTX;
 
+uint32_t txID=0;
+
 tCANMsgObject sCANMessageRX;
 uint32_t ui32MsgDataRX;
 uint8_t *pui8MsgDataRX;
+
+// GPIO
+volatile int interrupt_counter=0;
+volatile int config_flag = 1;
+
+
+// Reference
+// https://sites.google.com/site/luiselectronicprojects/tutorials/tiva-tutorials/tiva-gpio/digital-input-with-interrupt
+void PortDIntHandler(void){
+    uint32_t status=0;
+    status = GPIOIntStatus(GPIO_PORTD_BASE,true);
+    GPIOIntClear(GPIO_PORTD_BASE, WIRE_GPIO_INT_PIN);
+    if( (status & WIRE_GPIO_INT_PIN) == WIRE_GPIO_INT_PIN){
+      //Then there was a pin4 interrupt
+        interrupt_counter = interrupt_counter+1;
+    }
+
+    if( (status & GPIO_INT_PIN_5) == GPIO_INT_PIN_5){
+      //Then there was a pin5 interrupt
+    }
+
+}
+
 
 
 // Added to github
@@ -257,7 +325,7 @@ CANIntHandler(void)
         // controller status.
         //
         ui32Status = CANStatusGet(CAN0_BASE, CAN_STS_CONTROL);
-        UARTprintf("Status: 0x%08X",ui32Status);
+        //UARTprintf("Status: 0x%08X",ui32Status);
 
         //
         // Set a flag to indicate some errors may have occurred.
@@ -284,7 +352,7 @@ CANIntHandler(void)
         // sent.  In a real application this could be used to set flags to
         // indicate when a message is sent.
         //
-        g_ui32MsgCount++;
+        //g_ui32MsgCount++;
 
         //
         // Since the message was sent, clear any error flags.
@@ -360,6 +428,11 @@ UARTIntHandler(void)
 {
     uint32_t ui32Status;
     char charBuf[15];
+    if (config_flag == 1){
+        // we are in configuration mode
+        interrupt_counter = 1;
+    }
+
 
     //
     // Get the interrrupt status.
@@ -411,25 +484,39 @@ int main(void) {
     QEIconfig(ENCODER_COUNT_1-1,ENCODER_COUNT_1-1); // zero based
     QEIvelocityConfig();
     InitConsole();
-    GPIOconfig();
-    TIMERconfig();
-    CANconfig();
-    CANTXmsgconfig(pui8MsgDataTX); // set pointer to message data.
-    CANRXmsgconfig();
-    //
     IntEnable(INT_UART0);
     UARTIntEnable(UART0_BASE, UART_INT_RX | UART_INT_RT);
+    GPIOconfig();
+    TIMERconfig();
+    PULSEconfig();
+    PULSEorderconfig(); // infinite loop until signal received
+    CANconfig();
+    CANRXmsgconfig();
+
+    // Need a wait for ready pulse here
+
+
+
+
+
+    CANTXmsgconfig(pui8MsgDataTX); // set pointer to message data.
+
+
 
 
 
     //setSpeed(pwmout0,dir0,motornum);
-    char floatBuf[20];
-
-
+    //char floatBuf[20];
+    SysCtlDelay(SysCtlClockGet());
     while (1)
     {
-        CANsend();
+
+        // pulse complete
+        // okay we received one, wait for time!
         CANget();
+        CANsend();
+
+
 
 
         //PIDPosupdate();
@@ -460,6 +547,69 @@ int main(void) {
         //SysCtlDelay (1000);
     }
 }
+/*
+ * This function sets up the order in which the controllers are ordered.
+ */
+void PULSEorderconfig(){
+    while(interrupt_counter==0){
+        ; // do nothing. It will only change if the input GPIO is interrupted OR UART is triggered, then it will be 1.
+    }
+    UARTprintf("Okay, counting!\n");
+    SysCtlDelay(100000);
+    interrupt_counter = interrupt_counter+1; // increment our counter, this is our ID
+    txID = interrupt_counter;
+    UARTprintf("ID is: %d\n", interrupt_counter);
+    PULSEsend();
+    UARTprintf("Sending complete.\n");
+
+}
+
+void PULSEconfig(){
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOD);
+    GPIOPinTypeGPIOInput(GPIO_PORTD_BASE, WIRE_GPIO_PIN);  // make F4 an input
+    GPIOPadConfigSet(GPIO_PORTD_BASE,WIRE_GPIO_PIN,GPIO_STRENGTH_2MA,GPIO_PIN_TYPE_STD_WPU);   // enable F4's pullup, the drive strength won't affect the input
+    GPIOIntTypeSet(GPIO_PORTD_BASE,WIRE_GPIO_PIN,GPIO_FALLING_EDGE);
+    GPIOIntRegister(GPIO_PORTD_BASE,PortDIntHandler);
+    GPIOIntEnable(GPIO_PORTD_BASE, WIRE_GPIO_INT_PIN);
+}
+
+void PULSEsend(){
+    // config output here
+    GPIOPinTypeGPIOOutput(GPIO_PORTD_BASE, GPIO_PIN_2);
+    int i;
+    uint32_t state=0;
+    for(i=0;i<interrupt_counter;i++){
+        GPIOPinWrite(GPIO_PORTD_BASE,GPIO_PIN_2, state);
+        SysCtlDelay(1000);
+        state^=GPIO_PIN_2;
+        GPIOPinWrite(GPIO_PORTD_BASE,GPIO_PIN_2, state);
+        SysCtlDelay(1000);
+    }
+    GPIOIntDisable(GPIO_PORTD_BASE,WIRE_GPIO_INT_PIN); // We no longer need the interrupt
+    config_flag=0; // no longer configuring
+}
+
+void WIREwrite(){
+    ;
+}
+
+void WIREread(){
+    ;
+}
+
+/*
+ * ONLY devices with UART connected can send the START pulse
+ * Once the device receives a start pulse, it will add 1 to the pulse and send it to the output! It will then take the pulse as the ID
+ */
+void WIREconfig(){
+
+    while (first_node_flag==0){
+        WIREread();
+    }
+    WIREwrite();
+}
+
+
 void CANget(){
 
     unsigned int uIdx;
@@ -531,10 +681,12 @@ void CANsend() {
     //           pui8MsgDataTX[3]);
     //UARTprintf("data is %d",ui32MsgDataTX);
     //
+
+
+
     // Send the CAN message using object number 1 (not the same thing as
     // CAN ID, which is also 1 in this example).  This function will cause
     // the message to be transmitted right away.
-    //
     CANMessageSet(CAN0_BASE, 1, &sCANMessageTX, MSG_OBJ_TYPE_TX);
     //
     // Check the error flag to see if errors occurred
@@ -555,6 +707,7 @@ void CANsend() {
     // Increment the value in the message data.
     //
     ui32MsgDataTX++;
+    SysCtlDelay(500);
 }
 
 void CANRXmsgconfig(){
@@ -567,7 +720,7 @@ void CANRXmsgconfig(){
 }
 
 void CANTXmsgconfig(uint8_t *pui8MsgData){
-    sCANMessageTX.ui32MsgID = 1;
+    sCANMessageTX.ui32MsgID = txID;
     sCANMessageTX.ui32MsgIDMask = 0;
     sCANMessageTX.ui32Flags = MSG_OBJ_TX_INT_ENABLE;
     sCANMessageTX.ui32MsgLen = sizeof(pui8MsgDataTX);
@@ -586,8 +739,13 @@ void CANconfig(){
     GPIOPinTypeCAN(GPIO_PORTB_BASE, GPIO_PIN_4 | GPIO_PIN_5);
     SysCtlPeripheralEnable(SYSCTL_PERIPH_CAN0);
     CANInit(CAN0_BASE);
+    //CANRetrySet(CAN0_BASE,1);
     // In this example, the CAN bus is set to 500 kHz.
-    CANBitRateSet(CAN0_BASE, SysCtlClockGet(), 5000);
+    if(CANBitRateSet(CAN0_BASE, SysCtlClockGet(), 1000000)==0){
+        while(1){
+            UARTprintf("Bit rate set error!");
+        }
+    }
     CANIntEnable(CAN0_BASE, CAN_INT_MASTER | CAN_INT_ERROR | CAN_INT_STATUS);
     IntEnable(INT_CAN0);
     CANEnable(CAN0_BASE);

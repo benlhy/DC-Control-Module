@@ -6,6 +6,7 @@ main.obj: C:/ti/ccsv7/tools/compiler/ti-cgt-arm_17.9.0.STS/include/stdbool.h
 main.obj: C:/ti/ccsv7/tools/compiler/ti-cgt-arm_17.9.0.STS/include/stdio.h
 main.obj: C:/ti/ccsv7/tools/compiler/ti-cgt-arm_17.9.0.STS/include/linkage.h
 main.obj: C:/ti/ccsv7/tools/compiler/ti-cgt-arm_17.9.0.STS/include/stdarg.h
+main.obj: C:/ti/ccsv7/tools/compiler/ti-cgt-arm_17.9.0.STS/include/stdlib.h
 main.obj: C:/ti/TivaWare_C_Series-2.1.3.156/inc/hw_gpio.h
 main.obj: C:/ti/TivaWare_C_Series-2.1.3.156/inc/hw_types.h
 main.obj: C:/ti/TivaWare_C_Series-2.1.3.156/inc/hw_ints.h
@@ -36,6 +37,7 @@ C:/ti/ccsv7/tools/compiler/ti-cgt-arm_17.9.0.STS/include/stdbool.h:
 C:/ti/ccsv7/tools/compiler/ti-cgt-arm_17.9.0.STS/include/stdio.h: 
 C:/ti/ccsv7/tools/compiler/ti-cgt-arm_17.9.0.STS/include/linkage.h: 
 C:/ti/ccsv7/tools/compiler/ti-cgt-arm_17.9.0.STS/include/stdarg.h: 
+C:/ti/ccsv7/tools/compiler/ti-cgt-arm_17.9.0.STS/include/stdlib.h: 
 C:/ti/TivaWare_C_Series-2.1.3.156/inc/hw_gpio.h: 
 C:/ti/TivaWare_C_Series-2.1.3.156/inc/hw_types.h: 
 C:/ti/TivaWare_C_Series-2.1.3.156/inc/hw_ints.h: 

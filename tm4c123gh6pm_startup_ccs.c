@@ -59,6 +59,7 @@ extern uint32_t __STACK_TOP;
 extern void UARTIntHandler(void);
 extern void Timer0IntHandler(void);
 extern void CANIntHandler(void);
+extern void PortDIntHandler(void);
 
 //*****************************************************************************
 //
@@ -90,7 +91,7 @@ void (* const g_pfnVectors[])(void) =
     IntDefaultHandler,                      // GPIO Port A
     IntDefaultHandler,                      // GPIO Port B
     IntDefaultHandler,                      // GPIO Port C
-    IntDefaultHandler,                      // GPIO Port D
+    PortDIntHandler,                        // GPIO Port D
     IntDefaultHandler,                      // GPIO Port E
     UARTIntHandler,                         // UART0 Rx and Tx
     IntDefaultHandler,                      // UART1 Rx and Tx

@@ -421,7 +421,7 @@ Timer0IntHandler(void)
     //
     // Use the flags to Toggle the LED for this timer
     //
-    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3, ledFlag<<3);
+    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_0, ledFlag<<0);
 
 }
 
@@ -944,7 +944,6 @@ void TIMERconfig(void){
     IntEnable(INT_TIMER0A);
     TimerIntEnable(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
     TimerEnable(TIMER0_BASE, TIMER_A);
-    GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_3); // LED for the timer
 
 }
 
@@ -1084,11 +1083,20 @@ void PWMconfig(int period){
 
 
 void GPIOconfig(void){
+    HWREG(GPIO_PORTF_BASE+GPIO_O_LOCK) = GPIO_LOCK_KEY;
+    HWREG(GPIO_PORTF_BASE+GPIO_O_CR) |= GPIO_PIN_0;
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
+    while(!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOF))
+    {
+    }
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);
     while(!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOE))
     {
     }
     GPIOPinTypeGPIOOutput(GPIO_PORTE_BASE, GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3);
+    GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_0 | GPIO_PIN_3);
+
+
     //GPIOPinWrite(GPIO_PORTE_BASE, GPIO_PIN_1, GPIO_PIN_1); // AN1
     //GPIOPinWrite(GPIO_PORTE_BASE, GPIO_PIN_2, GPIO_PIN_2); // AN1
     //GPIOPinWrite(GPIO_PORTE_BASE, GPIO_PIN_3, GPIO_PIN_3); // AN1

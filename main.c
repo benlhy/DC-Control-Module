@@ -129,8 +129,8 @@ void WIREconfig(void);
 void PULSEconfig(void);
 
 // Master-Slave communication over CAN
-void tellSlaveAngle(int device,int mode,int angle1,int angle2);
-void tellMasterAngle(int device,int mode,int angle1,int angle2);
+void tellAngle(int device,int mode,int angle1,int angle2);
+
 
 // Pulse
 void PULSEsend(void);
@@ -244,13 +244,20 @@ uint8_t stateTable[4] = {
 tCANMsgObject sCANMessageTX;
 uint32_t ui32MsgDataTX;
 uint8_t *pui8MsgDataTX;
-uint8_t ui8MsgDataTX[5];
+uint8_t ui8MsgDataTX[6];
 uint32_t txID=0;
 
 tCANMsgObject sCANMessageRX;
 uint32_t ui32MsgDataRX;
 uint8_t *pui8MsgDataRX;
-uint8_t ui8MsgDataRX[5];
+uint8_t ui8MsgDataRX[6];
+
+int currMode;
+int desiredAngle1;
+int desiredAngle2;
+int currAngle1;
+int currAngle2;
+
 
 // GPIO
 volatile int interrupt_counter=0;
@@ -274,10 +281,6 @@ void PortDIntHandler(void){
 
 }
 
-
-
-// Added to github
-
 //*****************************************************************************
 //
 // A counter that keeps track of the number of times the RX interrupt has
@@ -299,7 +302,6 @@ volatile bool g_bRXFlag = 0;
 //
 //*****************************************************************************
 volatile bool g_bErrFlag = 0;
-
 
 //*****************************************************************************
 //
@@ -477,8 +479,8 @@ UARTIntHandler(void)
 
 
 int main(void) {
-    pui8MsgDataTX=(uint8_t *)&ui32MsgDataTX; // point it to ui32MsgData because CAN only deals in 8 bytes
-    pui8MsgDataRX=(uint8_t *)&ui32MsgDataRX; // point it to ui32MsgData because CAN only deals in 8 bytes
+    pui8MsgDataTX=(uint8_t *)&ui8MsgDataTX; // point it to ui32MsgData because CAN only deals in 8 bytes
+    pui8MsgDataRX=(uint8_t *)&ui8MsgDataRX; // point it to ui32MsgData because CAN only deals in 8 bytes
     //ui32MsgDataTX = 0;
 
     // Set the clock to 80Mhz
@@ -496,6 +498,7 @@ int main(void) {
     GPIOconfig();
     TIMERconfig();
     PULSEconfig();
+
     PULSEorderconfig(); // infinite loop until signal received
     CANconfig();
     CANRXmsgconfig();
@@ -506,22 +509,36 @@ int main(void) {
 
 
 
-    CANTXmsgconfig(pui8MsgDataTX); // set pointer to message data.
-
-
-
-
-
+    CANTXmsgconfig(ui8MsgDataTX); // set pointer to message data.
     //setSpeed(pwmout0,dir0,motornum);
     //char floatBuf[20];
     SysCtlDelay(SysCtlClockGet());
     while (1)
     {
+        while(g_bRXFlag == 1){
+            CANget();
+        }
 
         // pulse complete
         // okay we received one, wait for time!
-        CANget();
+        currPosition1 = QEI1posGet(ENCODER_COUNT_1-1);
+        currPosition0 = QEI0posGet(ENCODER_COUNT_1-1);
+        SysCtlDelay(SysCtlClockGet()/1000);
+
+
+        if (txID == 2){
+            UARTprintf("Sending to slave %d\n",3);
+            desiredAngle1++;
+            UARTprintf("Sent angle: %d\n", desiredAngle1);
+            tellAngle(3 ,1,desiredAngle1,desiredAngle2);
+        }
+        else  {
+            UARTprintf("Reporting to master, from slave %d \n",txID);
+            tellAngle(txID,1,currPosition0,currPosition1);
+        }
         CANsend();
+
+
 
 
 
@@ -557,32 +574,18 @@ int main(void) {
 /*
  * This function sets the CAN TX message for the master to tell slave devices the angle to turn to
  */
-
-void tellSlaveAngle(int device, int mode, int angle1, int angle2){
-    ui32MsgDataTX = 0;
-    ui32MsgDataTX = device<<4; // 8 bits
-    ui32MsgDataTX |= mode; // 4 bits
-    ui32MsgDataTX =  ui32MsgDataTX << 16; // counts
-    ui32MsgDataTX |= angle1;
-    ui32MsgDataTX =  ui32MsgDataTX << 16; // counts
-    ui32MsgDataTX |= angle2;
+void tellAngle(int device, int mode, int angle1, int angle2){
+    ui8MsgDataTX[0] = device;
+    ui8MsgDataTX[1] = mode;
+    ui8MsgDataTX[2] = (angle1 & 0b1111111100000000)>>8; // first 8
+    ui8MsgDataTX[3] = angle1 & 0b0000000011111111;
+    ui8MsgDataTX[4] = (angle2 & 0b1111111100000000)>>8; // first 8
+    ui8MsgDataTX[5] = angle2 & 0b0000000011111111;
+    //UARTprintf("Size of array is: %d", sizeof(ui8MsgDataTX));
+    //UARTprintf("device: %d, mode: %d, angle 1: %d, angle 2: %d",ui8MsgDataTX[0],ui8MsgDataTX[1],
+    //           (ui8MsgDataTX[2]<<8)|ui8MsgDataTX[3],(ui8MsgDataTX[4]<<8)|ui8MsgDataTX[5]);
 
 }
-
-/*
- * This function tells the Master what the hell is going on.
- * Total number of bits: 4+4+16+16 = 40
- */
-void tellMasterAngle(int device,int mode,int angle1,int angle2) {
-    ui32MsgDataTX = 0;
-    ui32MsgDataTX = device << 4; // 4 bits
-    ui32MsgDataTX |= mode; // 4 bits
-    ui32MsgDataTX =  ui32MsgDataTX << 16; // counts
-    ui32MsgDataTX |= angle1;
-    ui32MsgDataTX =  ui32MsgDataTX << 16; // counts
-    ui32MsgDataTX |= angle2;
-}
-
 
 /*
  * This function sets up the order in which the controllers are ordered.
@@ -627,10 +630,9 @@ void PULSEsend(){
 }
 
 
+// get CAN messages and process them
 void CANget(){
-
     unsigned int uIdx;
-
     //
     // If the flag is set, that means that the RX interrupt occurred and
     // there is a message ready to be read from the CAN
@@ -644,7 +646,7 @@ void CANget(){
         // received data must also be provided, so set the buffer pointer
         // within the message object.
         //
-        sCANMessageRX.pui8MsgData = pui8MsgDataRX;
+        sCANMessageRX.pui8MsgData = ui8MsgDataRX;
 
         //
         // Read the message from the CAN.  Message object number 2 is used
@@ -660,53 +662,44 @@ void CANget(){
         //
         g_bRXFlag = 0;
 
-
-        //
-        // Check to see if there is an indication that some messages were
-        // lost.
-        //
         if(sCANMessageRX.ui32Flags & MSG_OBJ_DATA_LOST)
         {
             UARTprintf("CAN message loss detected\n");
         }
 
-        //
-        // Print out the contents of the message that was received.
-        //
-        UARTprintf("Msg ID=0x%08X len=%u data=0x",
-                   sCANMessageRX.ui32MsgID, sCANMessageRX.ui32MsgLen);
-        uint8_t device = pui8MsgDataRX[0]&0b11110000; // first 4 bits is address
-        uint8_t mode = pui8MsgDataRX[0]&0b00001111;  // next 4 bits is the mode
-        uint16_t angle1;
-        uint16_t angle2;
-        if (mode == 1){
-            // we are tracking.
-            angle1 = (pui8MsgDataRX[1]<<8)|pui8MsgDataRX[2];
-            angle2 = (pui8MsgDataRX[3]<<8)|pui8MsgDataRX[4];
-        }
-        UARTprintf("Device: %d, Mode: %d, Angle 1:%d, Angle 2:%d \n",device,mode,angle1,angle2);
+        //UARTprintf("Msg ID=0x%08X len=%u",
+        //           sCANMessageRX.ui32MsgID, sCANMessageRX.ui32MsgLen);
 
+
+
+        uint8_t device = ui8MsgDataRX[0];
+        uint8_t mode = ui8MsgDataRX[1];
+        uint16_t data1 = (ui8MsgDataRX[2]<<8)|ui8MsgDataRX[3]; // 16 bits
+        uint16_t data2 = (ui8MsgDataRX[4]<<8)|ui8MsgDataRX[5];
+        //uint16_t data2 = (ui8MsgDataRX[4]<<8)|ui8MsgDataRX[5]; // 16 bits
+        if (device==2){
+            // master is sending the message
+            currMode = mode;
+            if (mode==1){
+                desiredAngle1 = data1;
+                desiredAngle2 = data2;
+
+            }
+        }
+        UARTprintf("RX, Device: %d, Mode: %d, Angle 1:%d, Angle 2:%d ",device,mode,data1,data2);
         UARTprintf(" total count=%u\n", g_ui32MsgCount);
     }
-    //UARTprintf("Oops, flag not set!\n");
+
 
 }
 
-
 void CANsend() {
-    //
-    // Data structure:
-    // Address (to/from)
-    // Command
-    // Data
-    //
+
     //UARTprintf("Sending msg: 0x%02X %02X %02X %02X",
     //           pui8MsgDataTX[0], pui8MsgDataTX[1], pui8MsgDataTX[2],
     //           pui8MsgDataTX[3]);
     //UARTprintf("data is %d",ui32MsgDataTX);
     //
-
-
 
     // Send the CAN message using object number 1 (not the same thing as
     // CAN ID, which is also 1 in this example).  This function will cause
@@ -727,19 +720,7 @@ void CANsend() {
         //UARTprintf(" total count = %u\n", g_ui32MsgCount);
     }
 
-    //
-    // Increment the value in the message data.
-    //
-
     //ui32MsgDataTX++;
-    if (txID==MASTER){
-        // tell slaves what to do here
-        tellSlaveAngle(3,1,180,0); // slave 3, mode 1, angle 1 = 180, angle 2 = 0
-    }
-    else {
-        // report back to master what we are doing
-        tellMasterAngle(2,1,currPosition0,currPosition1);
-    }
     SysCtlDelay(500);
 }
 
@@ -752,7 +733,7 @@ void CANRXmsgconfig(){
     }
     sCANMessageRX.ui32MsgIDMask = 0;
     sCANMessageRX.ui32Flags = MSG_OBJ_RX_INT_ENABLE | MSG_OBJ_USE_ID_FILTER;
-    sCANMessageRX.ui32MsgLen = 5;
+    sCANMessageRX.ui32MsgLen = 6;
     CANMessageSet(CAN0_BASE, 2, &sCANMessageRX, MSG_OBJ_TYPE_RX);
 
 }
@@ -761,9 +742,9 @@ void CANTXmsgconfig(uint8_t *pui8MsgData){
     sCANMessageTX.ui32MsgID = txID;
     sCANMessageTX.ui32MsgIDMask = 0;
     sCANMessageTX.ui32Flags = MSG_OBJ_TX_INT_ENABLE;
-    sCANMessageTX.ui32MsgLen = sizeof(pui8MsgDataTX);
-    sCANMessageTX.pui8MsgData = pui8MsgDataTX;
-    CANMessageSet(CAN0_BASE, 1, &sCANMessageTX, MSG_OBJ_TYPE_TX);
+    sCANMessageTX.ui32MsgLen = sizeof(ui8MsgDataTX);
+    sCANMessageTX.pui8MsgData = ui8MsgDataTX;
+    //CANMessageSet(CAN0_BASE, 1, &sCANMessageTX, MSG_OBJ_TYPE_TX);
 
 }
 
@@ -787,9 +768,6 @@ void CANconfig(){
     CANIntEnable(CAN0_BASE, CAN_INT_MASTER | CAN_INT_ERROR | CAN_INT_STATUS);
     IntEnable(INT_CAN0);
     CANEnable(CAN0_BASE);
-
-
-
 }
 
 float counttoRPM(int count){
@@ -973,7 +951,6 @@ void QEI0zero(int max_count){
     QEIPositionSet(QEI0_BASE,max_count/2);
 }
 
-
 int QEI1angleGet(int max_count){
     int some_val = (int)(((float)QEI1posGet(max_count)/(float)max_count)*360.0*5);
     return some_val;
@@ -1071,9 +1048,6 @@ void PWMconfig(int period){
 
     PWMOutputState(PWM1_BASE, PWM_OUT_5_BIT | PWM_OUT_6_BIT , true);
 }
-
-
-
 
 void GPIOconfig(void){
     HWREG(GPIO_PORTF_BASE+GPIO_O_LOCK) = GPIO_LOCK_KEY;

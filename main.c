@@ -828,6 +828,7 @@ void CANget(){
         UARTprintf("Msg ID=0x%08X len=%u data=0x",
                    sCANMessageRX.ui32MsgID, sCANMessageRX.ui32MsgLen);
 <<<<<<< HEAD
+<<<<<<< HEAD
         uint8_t device = pui8MsgDataRX[0]&0b11110000; // first 4 bits is address
         uint8_t mode = pui8MsgDataRX[0]&0b00001111;  // next 4 bits is the mode
         uint16_t angle1;
@@ -836,6 +837,11 @@ void CANget(){
             // we are tracking.
             angle1 = (pui8MsgDataRX[1]<<8)|pui8MsgDataRX[2];
             angle2 = (pui8MsgDataRX[3]<<8)|pui8MsgDataRX[4];
+=======
+        for(uIdx = 0; uIdx < sCANMessageRX.ui32MsgLen; uIdx++)
+        {
+            UARTprintf("%02X ", pui8MsgDataRX[uIdx]);
+>>>>>>> parent of d76d843... updated CAN with data structure
 =======
         for(uIdx = 0; uIdx < sCANMessageRX.ui32MsgLen; uIdx++)
         {

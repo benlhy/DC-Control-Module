@@ -523,7 +523,8 @@ int main(void) {
         // okay we received one, wait for time!
         currPosition1 = QEI1posGet(ENCODER_COUNT_1-1);
         currPosition0 = QEI0posGet(ENCODER_COUNT_1-1);
-        SysCtlDelay(SysCtlClockGet()/1000);
+        UARTprintf("curr1: %d, curr2: %d",currPosition0,currPosition1);
+        SysCtlDelay(SysCtlClockGet()/10);
 
 
         if (txID == 2){
@@ -534,7 +535,7 @@ int main(void) {
         }
         else  {
             UARTprintf("Reporting to master, from slave %d \n",txID);
-            tellAngle(txID,1,currPosition0,currPosition1);
+            tellAngle(txID,1,(uint16_t)currPosition0,(uint16_t)currPosition1);
         }
         CANsend();
 
@@ -575,6 +576,7 @@ int main(void) {
  * This function sets the CAN TX message for the master to tell slave devices the angle to turn to
  */
 void tellAngle(int device, int mode, int angle1, int angle2){
+
     ui8MsgDataTX[0] = device;
     ui8MsgDataTX[1] = mode;
     ui8MsgDataTX[2] = (angle1 & 0b1111111100000000)>>8; // first 8

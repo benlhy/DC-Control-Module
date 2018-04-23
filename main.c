@@ -555,12 +555,13 @@ int main(void) {
  * This function sets the CAN TX message for the master to tell slave devices the angle to turn to
  */
 
-void tellSlaveAngle(int device, int angle1, int angle2){
+void tellSlaveAngle(int device, int mode, int angle1, int angle2){
     ui32MsgDataTX = 0;
-    ui32MsgDataTX = device;
-    ui32MsgDataTX =  ui32MsgDataTX << 9;
+    ui32MsgDataTX = device<<4; // 8 bits
+    ui32MsgDataTX |= mode; // 4 bits
+    ui32MsgDataTX =  ui32MsgDataTX << 16; // counts
     ui32MsgDataTX |= angle1;
-    ui32MsgDataTX =  ui32MsgDataTX << 9;
+    ui32MsgDataTX =  ui32MsgDataTX << 16; // counts
     ui32MsgDataTX |= angle2;
 
 }
@@ -570,10 +571,11 @@ void tellSlaveAngle(int device, int angle1, int angle2){
  */
 void tellMasterAngle(int device,int angle1,int angle2) {
     ui32MsgDataTX = 0;
-    ui32MsgDataTX = device;
-    ui32MsgDataTX =  ui32MsgDataTX << 9;
+    ui32MsgDataTX = device<<4; // 8 bits
+    ui32MsgDataTX |= mode; // 4 bits
+    ui32MsgDataTX =  ui32MsgDataTX << 16; // counts
     ui32MsgDataTX |= angle1;
-    ui32MsgDataTX =  ui32MsgDataTX << 9;
+    ui32MsgDataTX =  ui32MsgDataTX << 16; // counts
     ui32MsgDataTX |= angle2;
 }
 
@@ -618,26 +620,6 @@ void PULSEsend(){
     }
     GPIOIntDisable(GPIO_PORTD_BASE,WIRE_GPIO_INT_PIN); // We no longer need the interrupt
     config_flag=0; // no longer configuring
-}
-
-void WIREwrite(){
-    ;
-}
-
-void WIREread(){
-    ;
-}
-
-/*
- * ONLY devices with UART connected can send the START pulse
- * Once the device receives a start pulse, it will add 1 to the pulse and send it to the output! It will then take the pulse as the ID
- */
-void WIREconfig(){
-
-    while (first_node_flag==0){
-        WIREread();
-    }
-    WIREwrite();
 }
 
 
